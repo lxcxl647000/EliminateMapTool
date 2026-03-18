@@ -2,11 +2,13 @@ import { _decorator, Color, Component, EditBox, instantiate, Label, Node, random
 import { SetBlock } from './SetBlock';
 import { Block } from './Block';
 import CocosUtils from './CocosUtils';
-import { BlockGridType, BlockType, GameConstant } from './GameConstant';
+import { BlockGridType, BlockType, GameConstant, RewardType } from './GameConstant';
 import { CommonTips } from './CommonTips';
+import { SetTargetPanel } from './SetTargetPanel';
+import { SetRewardPanel } from './SetRewardPanel';
 const { ccclass, property } = _decorator;
 
-interface LevelConfig {
+export interface LevelConfig {
     lvID: number,
     totalSteps: number,
     target: Target,
@@ -26,13 +28,13 @@ interface Target {
     value: TargetValue[]
 }
 
-interface TargetValue {
+export interface TargetValue {
     blockType: number,
     count: number
 }
 
-interface Reward {
-    type: number,
+export interface Reward {
+    type: RewardType,
     count: number
 }
 
@@ -62,6 +64,10 @@ export class GamePanel extends Component {
     checkLevelEditBox: EditBox = null!;
     @property(Label)
     selectFileLabel: Label = null!;
+    @property(SetTargetPanel)
+    setTargetPanel: SetTargetPanel = null!
+    @property(SetRewardPanel)
+    setRewardPanel: SetRewardPanel = null!
 
     private _blockGrid: Block[][] = [];
     private _levelConfigJson: LevelConfig[] = null!;
@@ -147,26 +153,12 @@ export class GamePanel extends Component {
             gameGrids.push(arr);
         }
 
-        let targetArr = this.targetEditBox.string.split('|');
-        let targetVal: TargetValue[] = [];
-        for (let i = 0; i < targetArr.length; i++) {
-            let target = targetArr[i].split(',');
-            targetVal.push({ blockType: parseInt(target[0]), count: parseInt(target[1]) });
-        }
-
-        let rewardArr = this.rewardEditBox.string.split('|');
-        let rewards: Reward[] = [];
-        for (let i = 0; i < rewardArr.length; i++) {
-            let reward = rewardArr[i].split(',');
-            rewards.push({ type: parseInt(reward[0]), count: parseInt(reward[1]) });
-        }
-
         let config: LevelConfig = {
             lvID: parseInt(this.levelEditBox.string),
             totalSteps: parseInt(this.stepsEditBox.string),
             target: {
                 type: 1,
-                value: targetVal
+                value: this._getTargetsData()
             },
             blockTypes: [1, 2, 3, 4],
             gameGrid: gameGrids,
@@ -174,7 +166,7 @@ export class GamePanel extends Component {
             guideBlocks: guides,
             fullStar: parseInt(this.fullStarsEditBox.string),
             mapId: parseInt(this.mapEditBox.string),
-            rewards: rewards,
+            rewards: this._getRewardData(),
             starCount: -1,
             score: 0
         }
@@ -250,20 +242,8 @@ export class GamePanel extends Component {
             this.setAllBlockType(null, true);
         }
         else {
-            let targetStr = '';
-            for (let i = 0; i < level.target.value.length; i++) {
-                let target = level.target.value[i];
-                targetStr += `${target.blockType},${target.count}${i === level.target.value.length - 1 ? '' : '|'}`;
-            }
-            this.targetEditBox.string = targetStr;
-
-            let rewardStr = '';
-            for (let i = 0; i < level.rewards.length; i++) {
-                let reward = level.rewards[i];
-                rewardStr += `${reward.type},${reward.count}${i === level.rewards.length - 1 ? '' : '|'}`;
-            }
-            this.rewardEditBox.string = rewardStr;
-
+            this.updateTargetEditbox(level.target.value);
+            this.updateRewardEditbox(level.rewards);
             if (level.blockGrid) {
                 this.setAllBlockType(level);
             }
@@ -360,7 +340,7 @@ export class GamePanel extends Component {
     }
 
     downloadFile() {
-        let str = JSON.stringify(this._levelConfigJson);
+        let str = JSON.stringify(this._levelConfigJson, null, 4);
         let fileName = this._selectFile.name;
         const blob = new Blob([str], { type: this._selectFile.type });
         const url = URL.createObjectURL(blob);
@@ -395,5 +375,65 @@ export class GamePanel extends Component {
                 break;
             }
         }
+    }
+
+    public updateTargetEditbox(targets: TargetValue[]) {
+        if (!targets || targets.length === 0) {
+            this.targetEditBox.string = '';
+        }
+        else {
+            let targetStr = '';
+            for (let i = 0; i < targets.length; i++) {
+                let target = targets[i];
+                targetStr += `${target.blockType},${target.count}${i === targets.length - 1 ? '' : '|'}`;
+            }
+            this.targetEditBox.string = targetStr;
+        }
+    }
+
+    onSelectTarget() {
+        this.setTargetPanel.showPanel(this._getTargetsData(), this);
+    }
+
+    private _getTargetsData() {
+        let targetVal: TargetValue[] = [];
+        if (this.targetEditBox.string !== '') {
+            let targetArr = this.targetEditBox.string.split('|');
+            for (let i = 0; i < targetArr.length; i++) {
+                let target = targetArr[i].split(',');
+                targetVal.push({ blockType: parseInt(target[0]), count: parseInt(target[1]) });
+            }
+        }
+        return targetVal;
+    }
+
+    public updateRewardEditbox(rewards: Reward[]) {
+        if (!rewards || rewards.length === 0) {
+            this.rewardEditBox.string = '';
+        }
+        else {
+            let rewardStr = '';
+            for (let i = 0; i < rewards.length; i++) {
+                let reward = rewards[i];
+                rewardStr += `${reward.type},${reward.count}${i === rewards.length - 1 ? '' : '|'}`;
+            }
+            this.rewardEditBox.string = rewardStr;
+        }
+    }
+
+    onSelectReward() {
+        this.setRewardPanel.showPanel(this._getRewardData(), this);
+    }
+
+    private _getRewardData() {
+        let rewards: Reward[] = [];
+        if (this.rewardEditBox.string !== '') {
+            let rewardArr = this.rewardEditBox.string.split('|');
+            for (let i = 0; i < rewardArr.length; i++) {
+                let reward = rewardArr[i].split(',');
+                rewards.push({ type: parseInt(reward[0]), count: parseInt(reward[1]) });
+            }
+        }
+        return rewards;
     }
 }

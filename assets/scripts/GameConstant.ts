@@ -60,4 +60,12 @@ export enum ToolType {
     Random = 10,
 }
 
-
+export enum RewardType {
+    Gold = 1,
+    Hammer = 2,
+    Energy = 3,
+    Boom = 4,
+    Theme_Clips = 5,// 主题碎片//
+    Steps = 6,
+    Sort = 7,
+}
