@@ -1,4 +1,4 @@
-import { _decorator, Component, EditBox, instantiate, JsonAsset, Label, Node, randomRangeInt, Sprite, Vec2 } from 'cc';
+import { _decorator, Color, Component, EditBox, instantiate, Label, Node, randomRangeInt, Sprite, Vec2 } from 'cc';
 import { SetBlock } from './SetBlock';
 import { Block } from './Block';
 import CocosUtils from './CocosUtils';
@@ -14,9 +14,11 @@ interface LevelConfig {
     gameGrid: number[][],
     blockGrid: number[][],
     guideBlocks: number[][],
-    fullStars: number,
+    fullStar: number,
     mapId: number,
-    rewards: Reward[]
+    rewards: Reward[],
+    starCount: number,
+    score: number
 }
 
 interface Target {
@@ -54,34 +56,34 @@ export class GamePanel extends Component {
     targetEditBox: EditBox = null!;
     @property(EditBox)
     rewardEditBox: EditBox = null!;
-    @property(EditBox)
-    guideEditBox: EditBox = null!;
     @property(CommonTips)
     commonTips: CommonTips = null!;
-    @property(JsonAsset)
-    levelConfigJson: JsonAsset = null!;
+    @property(EditBox)
+    checkLevelEditBox: EditBox = null!;
+    @property(Label)
+    selectFileLabel: Label = null!;
 
-    private _curBlock: Block = null!;
     private _blockGrid: Block[][] = [];
+    private _levelConfigJson: LevelConfig[] = null!;
+    private _selectFile: File = null!;
 
     start() {
         this._initCells();
     }
 
     private _initCells() {
-        for (let i = 0; i < GameConstant.Row; i++) {
+        for (let i = 0; i < GameConstant.Col; i++) {
             let rowBlock: Block[] = [];
-            for (let j = 0; j < GameConstant.Col; j++) {
+            for (let j = 0; j < GameConstant.Row; j++) {
                 let cellNode = instantiate(this.cellTmp);
-                cellNode.getComponentInChildren(Label).string = `${i},${j}`;
                 this.cellParent.addChild(cellNode);
                 cellNode.active = true;
                 let block = cellNode.getComponent(Block);
                 block.blockGridType = BlockGridType.Normal;
-                block.blockGridID = new Vec2(i, j);
+                block.blockGridID = new Vec2(j, GameConstant.Col - i - 1);
+                cellNode.getComponentInChildren(Label).string = `${block.blockGridID.x},${block.blockGridID.y}`;
                 cellNode.on("click", () => {
-                    this._curBlock = cellNode.getComponent(Block);
-                    this.setBlock.showPanel(this._curBlock, this);
+                    this.setBlock.showPanel(cellNode.getComponent(Block), this);
                 }, this);
                 rowBlock.push(block);
             }
@@ -90,17 +92,15 @@ export class GamePanel extends Component {
     }
 
     public updateBlock(block: Block) {
-        if (this._curBlock) {
-            this._curBlock.blockType = block.blockType;
-            let icon = this._curBlock.node.getChildByName('icon');
-            if (this._curBlock.blockType) {
-                icon.active = true;
-                CocosUtils.loadTextureFromBundle("game", `textures/cells/type${this._curBlock.blockType}`, icon.getComponent(Sprite));
-            }
-            else {
-                icon.active = false;
-            }
+        let icon = block.node.getChildByName('icon');
+        if (block.blockType) {
+            icon.active = true;
+            CocosUtils.loadTextureFromBundle("game", `textures/cells/type${block.blockType}`, icon.getComponent(Sprite));
         }
+        else {
+            icon.active = false;
+        }
+        block.node.getChildByName('guide').active = block.isGuide;
     }
 
     onExport() {
@@ -129,18 +129,22 @@ export class GamePanel extends Component {
             return;
         }
 
-        let gameGrids: number[][] = [];
-        let blockGrid: BlockType[][] = [];
+        let gameGrids: number[][] = [];//new Array(GameConstant.Row).fill(0).map(() => new Array(GameConstant.Col).fill(0));
+        let blockGrid: BlockType[][] = new Array(GameConstant.Row).fill(0).map(() => new Array(GameConstant.Col).fill(0));
+        let guides: number[][] = [];
         for (let i = 0; i < GameConstant.Row; i++) {
-            let row: BlockType[] = [];
-            let row2: number[] = [];
+            let arr = [];
             for (let j = 0; j < GameConstant.Col; j++) {
+                let blockType = this._blockGrid[j][i].blockType;
+                blockGrid[i][GameConstant.Col - j - 1] = blockType;
+
                 let block = this._blockGrid[i][j];
-                row.push(block.blockType);
-                row2.push(block.blockGridType);
+                arr.push(block.blockGridType);
+                if (block.isGuide) {
+                    guides.push([block.blockGridID.x, block.blockGridID.y]);
+                }
             }
-            blockGrid.push(row);
-            gameGrids.push(row2);
+            gameGrids.push(arr);
         }
 
         let targetArr = this.targetEditBox.string.split('|');
@@ -157,13 +161,6 @@ export class GamePanel extends Component {
             rewards.push({ type: parseInt(reward[0]), count: parseInt(reward[1]) });
         }
 
-        let guideArr = this.guideEditBox.string !== '' ? this.guideEditBox.string.split('|') : [];
-        let guides: number[][] = [];
-        for (let i = 0; i < guideArr.length; i++) {
-            let guide = guideArr[i].split(',');
-            guides.push([parseInt(guide[0]), parseInt(guide[1])]);
-        }
-
         let config: LevelConfig = {
             lvID: parseInt(this.levelEditBox.string),
             totalSteps: parseInt(this.stepsEditBox.string),
@@ -175,57 +172,227 @@ export class GamePanel extends Component {
             gameGrid: gameGrids,
             blockGrid: blockGrid,
             guideBlocks: guides,
-            fullStars: parseInt(this.fullStarsEditBox.string),
+            fullStar: parseInt(this.fullStarsEditBox.string),
             mapId: parseInt(this.mapEditBox.string),
-            rewards: rewards
+            rewards: rewards,
+            starCount: -1,
+            score: 0
         }
-        console.log('export levelconfig : ', config);
-
-
-        // let isNew = true;
-        // let jsonObj: any[] = this.levelConfigJson.json as any[];
-        // let obj = [];
-        // jsonObj.forEach(o => {
-        //     obj.push(o);
-        // });
-        // for (let o of obj) {
-        //     if (o.mapId === config.mapId && o.lvID === config.lvID) {
-        //         isNew = false;
-        //         o = config;
-        //         break;
-        //     }
-        // }
-        // if (isNew) {
-        //     obj.push(config);
-        // }
-
-        // let str = JSON.stringify(obj);
-        // let fileName = 'levels.json';
-        // const blob = new Blob([str], { type: "application/json" });
-        // const url = URL.createObjectURL(blob);
-
-        // const link = document.createElement("a");
-        // link.href = url;
-        // link.download = fileName; // 浏览器会询问用户保存位置，或使用默认下载目录
-
-        // document.body.appendChild(link);
-        // link.click();
-
-        // // 清理
-        // document.body.removeChild(link);
-        // URL.revokeObjectURL(url);
-
-        // console.log(`已触发下载: ${fileName}`);
+        let success = this.updateLevelConfigs(config);
+        if (success) {
+            this.downloadFile();
+        }
     }
 
-    onRandom() {
+    onRandomBlockType() {
+        this.setAllBlockType(null);
+    }
+
+    onClearBlockType() {
+        this.setAllBlockType(null, true);
+    }
+
+    onCheckLevel() {
+        if (this.checkLevelEditBox.string === '') {
+            this.commonTips.setTips('请输入关卡ID');
+            return;
+        }
+        let level = this.getLevelConfigByID(parseInt(this.checkLevelEditBox.string));
+        if (level) {
+            this.fillLevelData(level);
+        }
+    }
+
+    public getLevelConfigByID(id: number): LevelConfig {
+        if (!this._levelConfigJson) {
+            this.commonTips.setTips('请先选择关卡文件');
+            return null;
+        }
+        for (let o of this._levelConfigJson) {
+            if (o.lvID === id) {
+                return o;
+            }
+        }
+        this.commonTips.setTips('关卡不存在');
+        return null;
+    }
+
+    public updateLevelConfigs(levelConfig: LevelConfig): boolean {
+        if (!this._levelConfigJson) {
+            this.commonTips.setTips('请先选择关卡文件');
+            return false;
+        }
+        let isUpdate = false;
+        for (let i = 0; i < this._levelConfigJson.length; i++) {
+            let level = this._levelConfigJson[i];
+            if (level.lvID === levelConfig.lvID && level.mapId === levelConfig.mapId) {
+                this._levelConfigJson[i] = levelConfig;
+                isUpdate = true;
+                break;
+            }
+        }
+        if (!isUpdate) {
+            this._levelConfigJson.push(levelConfig);
+        }
+        this._levelConfigJson.sort((a, b) => a.lvID - b.lvID);
+        return true;
+    }
+
+    public fillLevelData(level: LevelConfig) {
+        this.mapEditBox.string = level ? level.mapId.toString() : '';
+        this.levelEditBox.string = level ? level.lvID.toString() : '';
+        this.stepsEditBox.string = level ? level.totalSteps.toString() : '';
+        this.fullStarsEditBox.string = level ? level.fullStar.toString() : '';
+
+        if (!level) {
+            this.targetEditBox.string = '';
+            this.rewardEditBox.string = '';
+            this.setAllBlockType(null, true);
+        }
+        else {
+            let targetStr = '';
+            for (let i = 0; i < level.target.value.length; i++) {
+                let target = level.target.value[i];
+                targetStr += `${target.blockType},${target.count}${i === level.target.value.length - 1 ? '' : '|'}`;
+            }
+            this.targetEditBox.string = targetStr;
+
+            let rewardStr = '';
+            for (let i = 0; i < level.rewards.length; i++) {
+                let reward = level.rewards[i];
+                rewardStr += `${reward.type},${reward.count}${i === level.rewards.length - 1 ? '' : '|'}`;
+            }
+            this.rewardEditBox.string = rewardStr;
+
+            if (level.blockGrid) {
+                this.setAllBlockType(level);
+            }
+            else {
+                this.setAllBlockType(null, true);
+            }
+        }
+    }
+
+    public setAllBlockType(level: LevelConfig, isClear: boolean = false) {
+        let blockGrid = null;
+        let guideBlocks = null;
+        if (level && level.blockGrid && !isClear) {
+            blockGrid = new Array(GameConstant.Row).fill(0).map(() => new Array(GameConstant.Col).fill(0));
+            for (let i = 0; i < GameConstant.Col; i++) {
+                for (let j = 0; j < GameConstant.Row; j++) {
+                    let blockType = level.blockGrid[i][j];
+                    blockGrid[GameConstant.Row - j - 1][i] = blockType;
+                }
+            }
+        }
+        if (level && level.guideBlocks && !isClear) {
+            guideBlocks = level.guideBlocks;
+        }
         for (let i = 0; i < GameConstant.Row; i++) {
             for (let j = 0; j < GameConstant.Col; j++) {
                 let block = this._blockGrid[i][j];
-                block.blockType = randomRangeInt(BlockType.Type1, BlockType.End);
-                let icon = block.node.getChildByName('icon');
-                icon.active = true;
-                CocosUtils.loadTextureFromBundle("game", `textures/cells/type${block.blockType}`, icon.getComponent(Sprite));
+                block.isGuide = false;
+                if (guideBlocks) {
+                    for (let k = 0; k < guideBlocks.length; k++) {
+                        if (guideBlocks[k][0] === block.blockGridID.x && guideBlocks[k][1] === block.blockGridID.y) {
+                            block.isGuide = true;
+                            break;
+                        }
+                    }
+                }
+                if (isClear) {
+                    block.blockType = BlockType.INVALID;
+                }
+                else {
+                    block.blockType = (blockGrid && blockGrid[i] && blockGrid[i][j]) ? blockGrid[i][j] : randomRangeInt(BlockType.Type1, BlockType.End);
+                }
+                this.updateBlock(block);
+            }
+        }
+    }
+
+    onSelectFile() {
+        this.selectFileInput();
+    }
+
+    selectFileInput() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,.txt';
+        input.style.display = 'none'; // 隐藏元素
+
+        // 监听文件选择变化
+        input.onchange = (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            if (target.files && target.files.length > 0) {
+                this._selectFile = target.files[0];
+                console.log(`用户选择了文件: ${this._selectFile.name}`);
+                this.readFileContent(this._selectFile);
+            }
+            // 清理 DOM，防止重复添加
+            document.body.removeChild(input);
+        };
+
+        document.body.appendChild(input);
+        input.click(); // 模拟点击，弹出系统对话框
+    }
+
+    readFileContent(file: File) {
+        const reader = new FileReader();
+        reader.readAsText(file); // 读取为文本 (json, txt等)
+        reader.onload = (e) => {
+            const text = e.target?.result as string;
+            // 如果是 JSON，可以解析
+            try {
+                const json = JSON.parse(text);
+                this._levelConfigJson = json;
+                console.log("解析后的JSON:", json);
+                this.selectFileLabel.string = '文件已选择';
+                this.selectFileLabel.node.parent.getComponent(Sprite).color = Color.GREEN;
+            } catch (err) {
+                console.log("不是 JSON 文件，纯文本内容如上");
+            }
+        };
+
+        reader.onerror = () => {
+            console.error("文件读取失败");
+        };
+    }
+
+    downloadFile() {
+        let str = JSON.stringify(this._levelConfigJson);
+        let fileName = this._selectFile.name;
+        const blob = new Blob([str], { type: this._selectFile.type });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName; // 浏览器会询问用户保存位置，或使用默认下载目录
+
+        document.body.appendChild(link);
+        link.click();
+
+        // 清理
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    onDelete() {
+        if (!this._levelConfigJson) {
+            this.commonTips.setTips('请先选择文件');
+            return;
+        }
+        if (this.levelEditBox.string === '') {
+            this.commonTips.setTips('请输入关卡ID');
+            return;
+        }
+        let levelID = parseInt(this.levelEditBox.string);
+        for (let i = 0; i < this._levelConfigJson.length; i++) {
+            if (this._levelConfigJson[i].lvID === levelID) {
+                this._levelConfigJson.splice(i, 1);
+                this.commonTips.setTips('删除成功');
+                this.fillLevelData(null);
+                break;
             }
         }
     }

@@ -9,5 +9,5 @@ export class Block extends Component {
     isTool: boolean = false;
     blockGridType: BlockGridType = BlockGridType.INVALID;
     blockGridID: Vec2;
-
+    isGuide: boolean = false;
 }

@@ -1,4 +1,4 @@
-import { _decorator, Component, EventTouch, instantiate, Layout, Node, Sprite, UITransform } from 'cc';
+import { _decorator, Component, EventTouch, instantiate, Layout, Node, Sprite, Toggle, UITransform } from 'cc';
 import { Block } from './Block';
 import { BlockType } from './GameConstant';
 import CocosUtils from './CocosUtils';
@@ -15,6 +15,8 @@ export class SetBlock extends Component {
     blockToggleTemp: Node = null!
     @property(UITransform)
     blockUITransform: UITransform = null!
+    @property(Toggle)
+    checkGuideToggle: Toggle = null!
 
     private _gamePanel: GamePanel = null!
     private _curBlock: Block = null!;
@@ -26,10 +28,22 @@ export class SetBlock extends Component {
         this.node.active = true;
 
         this._initBlockTypeToggle();
+        this._initData();
+    }
+
+    private _initData() {
+        if (this._curBlock) {
+            this.checkGuideToggle.isChecked = this._curBlock.isGuide;
+            this._selectBlockType = this._curBlock.blockType;
+            for (let toggle of this.blockTypeToggle.children) {
+                toggle.getComponent(Toggle).isChecked = toggle['blockType'] === this._selectBlockType;
+            }
+        }
     }
 
     private _initBlockTypeToggle() {
         if (this.blockTypeToggle.children.length > 0) {
+            this.blockTypeToggle.getChildByName(`blockType${BlockType.INVALID}`).getComponent(Toggle).isChecked = true;
             return;
         }
         let length = BlockType.End;
@@ -54,6 +68,7 @@ export class SetBlock extends Component {
     private _clearData() {
         this._curBlock = null;
         this._selectBlockType = BlockType.INVALID;
+        this.checkGuideToggle.isChecked = false;
     }
 
     onClose() {
@@ -67,6 +82,7 @@ export class SetBlock extends Component {
 
     onOk() {
         this._curBlock.blockType = this._selectBlockType;
+        this._curBlock.isGuide = this.checkGuideToggle.isChecked;
         this._gamePanel.updateBlock(this._curBlock);
         this.onClose();
     }
