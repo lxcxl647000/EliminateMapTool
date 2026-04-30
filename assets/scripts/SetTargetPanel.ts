@@ -87,14 +87,19 @@ export class SetTargetPanel extends Component {
     private _setTargetCount(targetType: ETargetType, type: BlockType | BlockGridType, count: number) {
         if (this._targetsMap.has(targetType)) {
             let targets = this._targetsMap.get(targetType)!;
-            if (count > 0) {
+            if (targets.has(type)) {
+                if (count > 0) {
+                    targets.set(type, count);
+                }
+                else {
+                    targets.delete(type);
+                }
+            }
+            else if (count > 0) {
                 targets.set(type, count);
             }
-            else {
-                targets.delete(type);
-            }
         }
-        else {
+        else if (count > 0) {
             this._targetsMap.set(targetType, new Map().set(type, count));
         }
     }
