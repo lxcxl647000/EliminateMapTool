@@ -2,7 +2,7 @@ import { _decorator, Color, Component, EditBox, instantiate, Label, Node, random
 import { SetBlock } from './SetBlock';
 import { Block } from './Block';
 import CocosUtils from './CocosUtils';
-import { BlockGridType, BlockType, GameConstant, RewardType } from './GameConstant';
+import { BlockGridType, BlockType, ETargetType, GameConstant, RewardType, ToolType } from './GameConstant';
 import { CommonTips } from './CommonTips';
 import { SetTargetPanel } from './SetTargetPanel';
 import { SetRewardPanel } from './SetRewardPanel';
@@ -11,7 +11,7 @@ const { ccclass, property } = _decorator;
 export interface LevelConfig {
     lvID: number,
     totalSteps: number,
-    target: Target,
+    target: Target[],
     blockTypes: number[],
     gameGrid: number[][],
     blockGrid: number[][],
@@ -20,16 +20,17 @@ export interface LevelConfig {
     mapId: number,
     rewards: Reward[],
     starCount: number,
-    score: number
+    score: number,
+    tools?: number[][]
 }
 
-interface Target {
-    type: number,
+export interface Target {
+    type: ETargetType,
     value: TargetValue[]
 }
 
 export interface TargetValue {
-    blockType: number,
+    type: number,
     count: number
 }
 
@@ -99,12 +100,21 @@ export class GamePanel extends Component {
 
     public updateBlock(block: Block) {
         let icon = block.node.getChildByName('icon');
-        if (block.blockType) {
+        let grid = block.node.getChildByName('grid');
+        if ((block.blockType || block.toolType) && (block.blockGridType === BlockGridType.Normal || block.blockGridType === BlockGridType.Ice_Thin)) {
             icon.active = true;
-            CocosUtils.loadTextureFromBundle("game", `textures/cells/type${block.blockType}`, icon.getComponent(Sprite));
+            let pathName = block.toolType ? `${ToolType[block.toolType]}` : `type${block.blockType}`;
+            CocosUtils.loadTextureFromBundle("game", `textures/cells/${pathName}`, icon.getComponent(Sprite));
         }
         else {
             icon.active = false;
+        }
+        if (block.blockGridType > BlockGridType.Normal) {
+            grid.active = true;
+            CocosUtils.loadTextureFromBundle("game", `textures/grids/${BlockGridType[block.blockGridType]}`, grid.getComponent(Sprite));
+        }
+        else {
+            grid.active = false;
         }
         block.node.getChildByName('guide').active = block.isGuide;
     }
@@ -135,40 +145,41 @@ export class GamePanel extends Component {
             return;
         }
 
-        let gameGrids: number[][] = [];//new Array(GameConstant.Row).fill(0).map(() => new Array(GameConstant.Col).fill(0));
+        let gameGrid: number[][] = new Array(GameConstant.Row).fill(0).map(() => new Array(GameConstant.Col).fill(0));
         let blockGrid: BlockType[][] = new Array(GameConstant.Row).fill(0).map(() => new Array(GameConstant.Col).fill(0));
-        let guides: number[][] = [];
+        let guideBlocks: number[][] = [];
+        let tools: number[][] = [];
         for (let i = 0; i < GameConstant.Row; i++) {
-            let arr = [];
             for (let j = 0; j < GameConstant.Col; j++) {
                 let blockType = this._blockGrid[j][i].blockType;
+                let gridType = this._blockGrid[j][i].blockGridType
                 blockGrid[i][GameConstant.Col - j - 1] = blockType;
+                gameGrid[i][GameConstant.Col - j - 1] = gridType;
 
                 let block = this._blockGrid[i][j];
-                arr.push(block.blockGridType);
                 if (block.isGuide) {
-                    guides.push([block.blockGridID.x, block.blockGridID.y]);
+                    guideBlocks.push([block.blockGridID.x, block.blockGridID.y]);
+                }
+                if (block.toolType) {
+                    tools.push([block.blockGridID.x, block.blockGridID.y, block.toolType]);
                 }
             }
-            gameGrids.push(arr);
         }
 
         let config: LevelConfig = {
             lvID: parseInt(this.levelEditBox.string),
             totalSteps: parseInt(this.stepsEditBox.string),
-            target: {
-                type: 1,
-                value: this._getTargetsData()
-            },
+            target: this._getTargetsData(),
             blockTypes: [1, 2, 3, 4],
-            gameGrid: gameGrids,
-            blockGrid: blockGrid,
-            guideBlocks: guides,
+            gameGrid,
+            blockGrid,
+            guideBlocks,
             fullStar: parseInt(this.fullStarsEditBox.string),
             mapId: parseInt(this.mapEditBox.string),
             rewards: this._getRewardData(),
             starCount: -1,
-            score: 0
+            score: 0,
+            tools
         }
         let success = this.updateLevelConfigs(config);
         if (success) {
@@ -242,20 +253,26 @@ export class GamePanel extends Component {
             this.setAllBlockType(null, true);
         }
         else {
-            this.updateTargetEditbox(level.target.value);
+            let arr = level.target['shift'] !== undefined ? level.target : [(level.target as any)];
+            let map = this._targetDataArrToMap(arr as any);
+            this.updateTargetEditbox(map);
             this.updateRewardEditbox(level.rewards);
-            if (level.blockGrid) {
-                this.setAllBlockType(level);
-            }
-            else {
-                this.setAllBlockType(null, true);
-            }
+            this.setAllBlockType(level);
         }
     }
 
     public setAllBlockType(level: LevelConfig, isClear: boolean = false) {
         let blockGrid = null;
         let guideBlocks = null;
+        let grids = new Array(GameConstant.Row).fill(0).map(() => new Array(GameConstant.Col).fill(1));
+        if (level && level.gameGrid && !isClear) {
+            for (let i = 0; i < GameConstant.Col; i++) {
+                for (let j = 0; j < GameConstant.Row; j++) {
+                    let gridType = level.gameGrid[i][j];
+                    grids[GameConstant.Row - j - 1][i] = gridType;
+                }
+            }
+        }
         if (level && level.blockGrid && !isClear) {
             blockGrid = new Array(GameConstant.Row).fill(0).map(() => new Array(GameConstant.Col).fill(0));
             for (let i = 0; i < GameConstant.Col; i++) {
@@ -282,9 +299,11 @@ export class GamePanel extends Component {
                 }
                 if (isClear) {
                     block.blockType = BlockType.INVALID;
+                    block.blockGridType = BlockGridType.Normal;
                 }
                 else {
                     block.blockType = (blockGrid && blockGrid[i] && blockGrid[i][j]) ? blockGrid[i][j] : randomRangeInt(BlockType.Type1, BlockType.End);
+                    block.blockGridType = (grids && grids[i] && grids[i][j]) ? grids[i][j] : BlockGridType.Normal;
                 }
                 this.updateBlock(block);
             }
@@ -377,34 +396,64 @@ export class GamePanel extends Component {
         }
     }
 
-    public updateTargetEditbox(targets: TargetValue[]) {
-        if (!targets || targets.length === 0) {
+    public updateTargetEditbox(targets: Map<ETargetType, Map<number, number>>) {
+        if (!targets || targets.size === 0) {
             this.targetEditBox.string = '';
         }
         else {
-            let targetStr = '';
-            for (let i = 0; i < targets.length; i++) {
-                let target = targets[i];
-                targetStr += `${target.blockType},${target.count}${i === targets.length - 1 ? '' : '|'}`;
+            let strArr: string[] = [];
+            targets.forEach((value, key) => {
+                let arr: string[] = [];
+                value.forEach((count, type) => {
+                    arr.push(`{"type":${type},"count":${count}}`);
+                });
+                let valStr = '';
+                for (let i = 0; i < arr.length; i++) {
+                    valStr += `${arr[i]}${i === arr.length - 1 ? '' : ','}`;
+                }
+                strArr.push(`{"type":${key},"value":[${valStr}]}`);
+            });
+            let str = '';
+            for (let i = 0; i < strArr.length; i++) {
+                str += `${strArr[i]}${i === strArr.length - 1 ? '' : ','}`;
             }
+            let targetStr = `[${str}]`;
             this.targetEditBox.string = targetStr;
         }
     }
 
     onSelectTarget() {
-        this.setTargetPanel.showPanel(this._getTargetsData(), this);
+        let map = this._targetDataArrToMap(this._getTargetsData());
+        this.setTargetPanel.showPanel(map, this);
     }
 
     private _getTargetsData() {
-        let targetVal: TargetValue[] = [];
+        let targetVal: Target[] = [];
         if (this.targetEditBox.string !== '') {
-            let targetArr = this.targetEditBox.string.split('|');
-            for (let i = 0; i < targetArr.length; i++) {
-                let target = targetArr[i].split(',');
-                targetVal.push({ blockType: parseInt(target[0]), count: parseInt(target[1]) });
+            try {
+                targetVal = JSON.parse(this.targetEditBox.string);
+            } catch (error) {
+                this.commonTips.setTips('输入错误格式');
             }
         }
         return targetVal;
+    }
+
+    private _targetDataArrToMap(targets: Target[]) {
+        let targetsMap: Map<ETargetType, Map<number, number>> = new Map<ETargetType, Map<number, number>>();
+        for (let target of targets) {
+            let map: Map<number, number> = new Map<number, number>();
+            target.value.forEach((t: TargetValue) => {
+                if (t['blockType'] !== undefined) {
+                    map.set(t['blockType'], t.count);
+                }
+                else {
+                    map.set(t.type, t.count);
+                }
+            });
+            targetsMap.set(target.type, map);
+        }
+        return targetsMap;
     }
 
     public updateRewardEditbox(rewards: Reward[]) {
@@ -435,5 +484,16 @@ export class GamePanel extends Component {
             }
         }
         return rewards;
+    }
+
+    onClearTools() {
+        for (let i = 0; i < GameConstant.Row; i++) {
+            for (let j = 0; j < GameConstant.Col; j++) {
+                if (this._blockGrid[i][j].toolType !== ToolType.INVALID) {
+                    this._blockGrid[i][j].toolType = ToolType.INVALID;
+                    this.updateBlock(this._blockGrid[i][j]);
+                }
+            }
+        }
     }
 }

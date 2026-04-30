@@ -6,7 +6,6 @@ const { ccclass, property } = _decorator;
 export class Block extends Component {
     blockType: BlockType = BlockType.INVALID;
     toolType: ToolType = ToolType.INVALID;
-    isTool: boolean = false;
     blockGridType: BlockGridType = BlockGridType.INVALID;
     blockGridID: Vec2;
     isGuide: boolean = false;

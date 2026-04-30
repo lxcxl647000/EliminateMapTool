@@ -1,7 +1,7 @@
 import { _decorator, Component, EditBox, instantiate, Node, Sprite } from 'cc';
-import { BlockType } from './GameConstant';
+import { BlockGridType, BlockType, ETargetType } from './GameConstant';
 import CocosUtils from './CocosUtils';
-import { GamePanel, TargetValue } from './GamePanel';
+import { GamePanel } from './GamePanel';
 const { ccclass, property } = _decorator;
 
 @ccclass('SetTargetPanel')
@@ -11,16 +11,20 @@ export class SetTargetPanel extends Component {
     @property(Node)
     layoutNode: Node = null!
 
-    private _targets: TargetValue[] = [];
-    private _gamePanel: GamePanel = null!
+    static readonly BlockType = '_BlockType';
+    static readonly GridType = '_GridType';
 
-    public showPanel(targets: TargetValue[], gamePanel: GamePanel) {
+    private _gamePanel: GamePanel = null!
+    private _targetsMap: Map<ETargetType, Map<number, number>> = new Map();
+
+    public showPanel(targets: Map<ETargetType, Map<number, number>>, gamePanel: GamePanel) {
         this._gamePanel = gamePanel;
-        this._targets = targets;
+        this._targetsMap = targets;
         this.node.active = true;
         this._initTarget();
         this._initData();
     }
+
 
     private _initTarget() {
         if (this.layoutNode.children.length > 0) {
@@ -31,70 +35,98 @@ export class SetTargetPanel extends Component {
             let targetNode = instantiate(this.tmpTarget);
             targetNode.name = "blockType" + i;
             targetNode.active = true;
-            targetNode['blockType'] = i;
+            targetNode[SetTargetPanel.BlockType] = i;
             this.layoutNode.addChild(targetNode);
             let icon = targetNode.getChildByName("icon").getComponent(Sprite);
             CocosUtils.loadTextureFromBundle("game", `textures/cells/type${i}`, icon);
-            targetNode.getComponentInChildren(EditBox).string = this._getTargetCount(i) === 0 ? '' : this._getTargetCount(i).toString();
+            let count = this._getTargetCount(ETargetType.Grid, i);
+            icon.getComponentInChildren(EditBox).string = count === 0 ? '' : count.toString();
+        }
+        let length2 = BlockGridType.End;
+        for (let i = BlockGridType.Ice_Thin; i < length2; i++) {
+            let targetNode = instantiate(this.tmpTarget);
+            targetNode.name = "gridType" + i;
+            targetNode.active = true;
+            targetNode[SetTargetPanel.GridType] = i;
+            this.layoutNode.addChild(targetNode);
+            let icon = targetNode.getChildByName("icon").getComponent(Sprite);
+            CocosUtils.loadTextureFromBundle("game", `textures/grids/${BlockGridType[i]}`, icon);
+            let count = this._getTargetCount(ETargetType.Block, i);
+            icon.getComponentInChildren(EditBox).string = count === 0 ? '' : count.toString();
         }
     }
 
     private _initData() {
         for (let target of this.layoutNode.children) {
-            let targetType = target['blockType'];
-            let count = this._getTargetCount(targetType);
-            target.getComponentInChildren(EditBox).string = count === 0 ? '' : count.toString();
+            let targetType = 0;
+            let type = 0;
+            if (target[SetTargetPanel.BlockType] !== undefined) {
+                type = target[SetTargetPanel.BlockType];
+                targetType = ETargetType.Block;
+            }
+            else if (target[SetTargetPanel.GridType] !== undefined) {
+                type = target[SetTargetPanel.GridType];
+                targetType = ETargetType.Grid;
+            }
+            let count = this._getTargetCount(targetType, type);
+            target.getChildByName("icon").getComponentInChildren(EditBox).string = count === 0 ? '' : count.toString();
         }
     }
 
-    private _getTargetCount(type: BlockType) {
-        if (this._targets.length > 0) {
-            for (let t of this._targets) {
-                if (t.blockType === type) {
-                    return t.count;
-                }
+    private _getTargetCount(targetType: ETargetType, type: BlockType | BlockGridType) {
+        let count = 0;
+        if (this._targetsMap.has(targetType)) {
+            let targets = this._targetsMap.get(targetType);
+            if (targets && targets.has(type)) {
+                count = targets.get(type);
             }
         }
-        return 0;
+        return count;
     }
 
-    private _setTargetCount(type: BlockType, count: number) {
-        if (this._targets.length > 0) {
-            let isUpdate = false;
-            for (let t of this._targets) {
-                if (t.blockType === type) {
-                    if (count > 0) {
-                        t.count = count;
-                    }
-                    else {
-                        let index = this._targets.indexOf(t);
-                        this._targets.splice(index, 1);
-                    }
-                    isUpdate = true;
-                    break;
-                }
+    private _setTargetCount(targetType: ETargetType, type: BlockType | BlockGridType, count: number) {
+        if (this._targetsMap.has(targetType)) {
+            let targets = this._targetsMap.get(targetType)!;
+            if (count > 0) {
+                targets.set(type, count);
             }
-            if (!isUpdate && count > 0) {
-                this._targets.push({ blockType: type, count });
+            else {
+                targets.delete(type);
             }
         }
-        else if (count > 0) {
-            this._targets.push({ blockType: type, count });
+        else {
+            this._targetsMap.set(targetType, new Map().set(type, count));
         }
     }
 
     onClose() {
-        this._targets = [];
+        this._targetsMap.clear();
         this.node.active = false;
     }
 
     onOk() {
         for (let target of this.layoutNode.children) {
-            let count = target.getComponentInChildren(EditBox).string === '' ? 0 : parseInt(target.getComponentInChildren(EditBox).string);
-            let targetType = target['blockType'];
-            this._setTargetCount(targetType, count);
+            let icon = target.getChildByName("icon");
+            let editStr = icon.getComponentInChildren(EditBox).string;
+            let count = editStr === '' ? 0 : parseInt(editStr);
+            let targetType = 0;
+            let type = 0;
+            if (target[SetTargetPanel.BlockType] !== undefined) {
+                type = target[SetTargetPanel.BlockType];
+                targetType = ETargetType.Block;
+            }
+            else if (target[SetTargetPanel.GridType] !== undefined) {
+                type = target[SetTargetPanel.GridType];
+                targetType = ETargetType.Grid;
+            }
+            this._setTargetCount(targetType, type, count);
         }
-        this._gamePanel.updateTargetEditbox(this._targets);
+        this._targetsMap.forEach((value: Map<number, number>, key: ETargetType) => {
+            if (value.size === 0) {
+                this._targetsMap.delete(key);
+            }
+        });
+        this._gamePanel.updateTargetEditbox(this._targetsMap);
         this.onClose();
     }
 }

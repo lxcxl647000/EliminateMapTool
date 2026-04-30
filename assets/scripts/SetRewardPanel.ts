@@ -1,5 +1,5 @@
 import { _decorator, Component, EditBox, Node } from 'cc';
-import { BlockType, RewardType } from './GameConstant';
+import { RewardType } from './GameConstant';
 import { GamePanel, Reward } from './GamePanel';
 const { ccclass, property } = _decorator;
 
