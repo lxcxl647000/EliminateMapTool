@@ -100,7 +100,11 @@ export class SetBlock extends Component {
             gridToggleNode.setPosition(16, pos.y, 0);
             let icon = gridToggleNode.getChildByName("icon").getComponent(Sprite);
             if (i > 1) {
-                CocosUtils.loadTextureFromBundle("game", `textures/grids/${BlockGridType[i]}`, icon);
+                let spriteName = BlockGridType[i === BlockGridType.Stone_Null ? BlockGridType.Stone : i];
+                CocosUtils.loadTextureFromBundle("game", `textures/grids/${spriteName}`, icon);
+                if (i === BlockGridType.Stone_Null) {
+                    icon.getComponentInChildren(Label).node.active = true;
+                }
             }
             else if (i === 0) {
                 icon.getComponentInChildren(Label).node.active = true;
@@ -151,9 +155,34 @@ export class SetBlock extends Component {
 
     onBlockTypeToggle(e: EventTouch) {
         this._selectBlockType = e.target['blockType'];
+        if (this._selectBlockType === BlockType.INVALID) {
+            return;
+        }
+        if (this._selectGridType > BlockGridType.Ice_Thin) {
+            this._resetSelectGrid();
+        }
+        if (this._selectToolType !== ToolType.INVALID) {
+            this._resetSelectTool();
+        }
     }
 
     onOk() {
+        if (this._selectBlockType !== BlockType.INVALID) {
+            if (this._selectGridType > BlockGridType.Ice_Thin) {
+                this._resetSelectGrid();
+            }
+            this._resetSelectTool();
+        }
+        else if (this._selectGridType > BlockGridType.Ice_Thin) {
+            this._resetSelectBlock();
+            this._resetSelectTool();
+            this.checkGuideToggle.isChecked = false;
+        }
+        else if (this._selectToolType !== ToolType.INVALID) {
+            this._resetSelectBlock();
+            this._resetSelectGrid();
+            this.checkGuideToggle.isChecked = false;
+        }
         this._curBlock.blockGridType = this._selectGridType;
         this._curBlock.blockType = this._selectBlockType;
         this._curBlock.toolType = this._selectToolType;
@@ -164,13 +193,48 @@ export class SetBlock extends Component {
 
     onGridTypeToggle(e: EventTouch) {
         this._selectGridType = e.target['gridType'];
+        if (this._selectGridType === BlockGridType.Normal || this._selectGridType === BlockGridType.Ice_Thin) {
+            if (this._selectBlockType === BlockType.INVALID) {
+                this._selectBlockType = BlockType.Type1;
+                this.blockTypeToggle.getChildByName(`blockType${BlockType.Type1}`).getComponent(Toggle).isChecked = true;
+            }
+            return;
+        }
+        if (this._selectBlockType !== BlockType.INVALID) {
+            this._resetSelectBlock();
+        }
+        if (this._selectToolType !== ToolType.INVALID) {
+            this._resetSelectTool();
+        }
+        this.checkGuideToggle.isChecked = false;
     }
 
     onToolTypeToggle(e: EventTouch) {
         this._selectToolType = e.target['toolType'];
-        if (this._selectToolType !== ToolType.INVALID) {
-            this._selectGridType = BlockGridType.Normal;
-            this.gridTypeToggle.getChildByName(`gridType${BlockGridType.Normal}`).getComponent(Toggle).isChecked = true;
+        if (this._selectToolType === ToolType.INVALID) {
+            return;
         }
+        if (this._selectBlockType !== BlockType.INVALID) {
+            this._resetSelectBlock();
+        }
+        if (this._selectGridType > BlockGridType.Normal) {
+            this._resetSelectGrid();
+        }
+        this.checkGuideToggle.isChecked = false;
+    }
+
+    private _resetSelectGrid() {
+        this._selectGridType = BlockGridType.Normal;
+        this.gridTypeToggle.getChildByName(`gridType${BlockGridType.Normal}`).getComponent(Toggle).isChecked = true;
+    }
+
+    private _resetSelectBlock() {
+        this._selectBlockType = BlockType.INVALID;
+        this.blockTypeToggle.getChildByName(`blockType${BlockType.INVALID}`).getComponent(Toggle).isChecked = true;
+    }
+
+    private _resetSelectTool() {
+        this._selectToolType = ToolType.INVALID;
+        this.toolTypeToggle.getChildByName(`toolType${ToolType.INVALID}`).getComponent(Toggle).isChecked = true;
     }
 }

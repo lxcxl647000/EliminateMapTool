@@ -20,6 +20,7 @@ export enum BlockGridType {
     Box = 4,// 箱子 消除一次消失 不能交换位置
     Stone_Chips = 5,// 石头碎片 消除一次消失 可以交换位置
     Stone = 6,// 石头 占4个格子 消除四次消失 不能交换位置
+    Stone_Null = 7,// 石头占位置用，与Stone一起组成四个格子的石头，起点左下为Stone，其他三个格子均为Stone_Null
     End
 };
 

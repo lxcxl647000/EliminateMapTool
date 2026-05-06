@@ -42,7 +42,7 @@ export class SetTargetPanel extends Component {
             let count = this._getTargetCount(ETargetType.Grid, i);
             icon.getComponentInChildren(EditBox).string = count === 0 ? '' : count.toString();
         }
-        let length2 = BlockGridType.End;
+        let length2 = BlockGridType.Stone_Null;
         for (let i = BlockGridType.Ice_Thin; i < length2; i++) {
             let targetNode = instantiate(this.tmpTarget);
             targetNode.name = "gridType" + i;
@@ -50,7 +50,8 @@ export class SetTargetPanel extends Component {
             targetNode[SetTargetPanel.GridType] = i;
             this.layoutNode.addChild(targetNode);
             let icon = targetNode.getChildByName("icon").getComponent(Sprite);
-            CocosUtils.loadTextureFromBundle("game", `textures/grids/${BlockGridType[i]}`, icon);
+            let spriteName = BlockGridType[i === BlockGridType.Stone_Null ? BlockGridType.Stone : i];
+            CocosUtils.loadTextureFromBundle("game", `textures/grids/${spriteName}`, icon);
             let count = this._getTargetCount(ETargetType.Block, i);
             icon.getComponentInChildren(EditBox).string = count === 0 ? '' : count.toString();
         }

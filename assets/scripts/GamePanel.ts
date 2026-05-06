@@ -88,7 +88,7 @@ export class GamePanel extends Component {
                 let block = cellNode.getComponent(Block);
                 block.blockGridType = BlockGridType.Normal;
                 block.blockGridID = new Vec2(j, GameConstant.Col - i - 1);
-                cellNode.getComponentInChildren(Label).string = `${block.blockGridID.x},${block.blockGridID.y}`;
+                cellNode.getChildByName('Label').getComponent(Label).string = `${block.blockGridID.x},${block.blockGridID.y}`;
                 cellNode.on("click", () => {
                     this.setBlock.showPanel(cellNode.getComponent(Block), this);
                 }, this);
@@ -111,7 +111,10 @@ export class GamePanel extends Component {
         }
         if (block.blockGridType > BlockGridType.Normal) {
             grid.active = true;
-            CocosUtils.loadTextureFromBundle("game", `textures/grids/${BlockGridType[block.blockGridType]}`, grid.getComponent(Sprite));
+            let spriteName = BlockGridType[block.blockGridType === BlockGridType.Stone_Null ? BlockGridType.Stone : block.blockGridType];
+            let icon = grid.getComponent(Sprite);
+            CocosUtils.loadTextureFromBundle("game", `textures/grids/${spriteName}`, icon);
+            icon.node.getChildByName('null').active = block.blockGridType === BlockGridType.Stone_Null;
         }
         else {
             grid.active = false;
